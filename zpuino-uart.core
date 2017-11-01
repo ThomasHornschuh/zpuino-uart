@@ -1,0 +1,26 @@
+CAPI=1
+[main]
+name = ::zpuino-uart:0
+depend = ::zpuino-fifo:0 ::bonfire-util:0
+backend = ise
+simulators=isim ghdl
+
+[fileset rtl]
+files = tx_unit.vhd uart_brgen.vhd uart_mv_filter.vhd uart_rx.vhd zpuino_uart.vhd
+file_type=vhdlSource
+
+[fileset sim]
+files = tb/tb_soc_uart.vhd
+file_type=vhdlSource
+#usage=sim
+scope = private
+
+[simulator]
+toplevel = tb_soc_uart
+
+[ise]
+family = spartan6
+device = xc6slx9
+package = tqg144
+speed = -2
+top_module = zpuino_uart
