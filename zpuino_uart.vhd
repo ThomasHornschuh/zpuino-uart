@@ -1,23 +1,23 @@
 --
 --  UART for ZPUINO
--- 
+--
 --  Copyright 2010 Alvaro Lopes <alvieboy@alvie.com>
--- 
+--
 --  Version: 1.0
--- 
+--
 --  The FreeBSD license
---  
+--
 --  Redistribution and use in source and binary forms, with or without
 --  modification, are permitted provided that the following conditions
 --  are met:
---  
+--
 --  1. Redistributions of source code must retain the above copyright
 --     notice, this list of conditions and the following disclaimer.
 --  2. Redistributions in binary form must reproduce the above
 --     copyright notice, this list of conditions and the following
 --     disclaimer in the documentation and/or other materials
 --     provided with the distribution.
---  
+--
 --  THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY
 --  EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
 --  THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
@@ -30,7 +30,7 @@
 --  STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 --  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 --  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
---  
+--
 --
 library ieee;
 use ieee.std_logic_1164.all;
@@ -41,14 +41,14 @@ library work;
 
 entity zpuino_uart is
   generic (
-    bits: integer := 11; -- log2 of FIFO depth 
+    bits: integer := 11; -- log2 of FIFO depth
     wordSize : natural := 32; -- Bus width
     maxIObit : natural := 2;  -- Adr bus  high
     minIObit : natural := 2   -- Adr bus  low
   );
   port (
     wb_clk_i: in std_logic;
-	 wb_rst_i: in std_logic;
+     wb_rst_i: in std_logic;
     wb_dat_o: out std_logic_vector(wordSize-1 downto 0);
     wb_dat_i: in std_logic_vector(wordSize-1 downto 0);
     wb_adr_i: in std_logic_vector(maxIObit downto minIObit);
@@ -69,7 +69,7 @@ architecture behave of zpuino_uart is
   component uart_rx is
   port (
     clk:      in std_logic;
-	 	rst:      in std_logic;
+        rst:      in std_logic;
     rx:       in std_logic;
     rxclk:    in std_logic;
     read:     in std_logic;
@@ -101,7 +101,7 @@ architecture behave of zpuino_uart is
      );
   end component uart_brgen;
 
-  component zpuino_fifo is
+  component zpuino_uart_fifo is
   generic (
     bits: integer := 11
   );
@@ -115,7 +115,7 @@ architecture behave of zpuino_uart is
     full:     out std_logic;
     empty:    out std_logic
   );
-  end component zpuino_fifo;
+  end component zpuino_uart_fifo;
 
 
   signal uart_read: std_logic;
@@ -172,7 +172,7 @@ begin
     );
 
   -- TODO: check multiple writes
-  uart_write <= '1' when (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1') and wb_adr_i(2)='0' else '0';
+  uart_write <= '1' when (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1') and wb_adr_i(minIObit)='0' else '0';
 
    -- Rx timing
   rx_timer: uart_brgen
@@ -214,7 +214,7 @@ begin
     end if;
   end process;
 
-  fifo_instance: zpuino_fifo
+  fifo_instance: zpuino_uart_fifo
     generic map (
       bits => bits
     )
@@ -228,9 +228,9 @@ begin
       full  => open,
       empty => fifo_empty
     );
-  
 
-  fifo_rd<='1' when wb_adr_i(2)='0' and (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='0') else '0';
+
+  fifo_rd<='1' when wb_adr_i(minIObit)='0' and (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='0') else '0';
 
   process(wb_adr_i, received_data, uart_busy, data_ready, fifo_empty, fifo_data,uart_intx)
   begin
@@ -255,7 +255,7 @@ begin
         enabled_q<='0';
       else
         if wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1' then
-          if wb_adr_i(2)='1' then
+          if wb_adr_i(minIObit)='1' then
             divider_rx_q <= wb_dat_i(15 downto 0);
             enabled_q  <= wb_dat_i(16);
           end if;

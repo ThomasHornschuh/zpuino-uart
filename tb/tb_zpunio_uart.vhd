@@ -40,10 +40,10 @@ use STD.textio.all;
 use work.txt_util.all;
 use work.log2.all;
 
-entity tb_soc_uart is
-end entity tb_soc_uart;
+entity tb_zpunio_uart is
+end entity tb_zpunio_uart;
 
-architecture testbench of tb_soc_uart is
+architecture testbench of tb_zpunio_uart is
 
 
     -- Clock signal:
@@ -81,7 +81,7 @@ architecture testbench of tb_soc_uart is
    signal cbyte : t_byte;
    signal bitref : integer :=0;
 
-   signal finish : boolean := false;
+   signal receive_test_finish : boolean := false;
 
    constant log_file : string := "receive.log";
    constant send_logfile : string := "send.log";
@@ -178,8 +178,8 @@ begin
 
        -- Send a string to the UART receiver pin
        sendstring(Teststr);
-       wait for bit_time*10; -- give some time for the receive process 
-       finish<=true; -- signal end of send simulation
+       wait for bit_time*10; -- give some time for the receive process
+       receive_test_finish<=true; -- signal end of send simulation
        wait;
 
    end process;
@@ -218,7 +218,7 @@ begin
     stimulus: process
       procedure uart_write(address : in std_logic_vector(wb_adr_in'range); data : in std_logic_vector(wb_dat_in'range)) is
         begin
-           
+
             wait until rising_edge(clk);
             wb_adr_in <= address;
             wb_dat_in <= data;
@@ -238,7 +238,7 @@ begin
       procedure uart_read(address : in std_logic_vector(wb_adr_in'range);
                           data: out std_logic_vector(wb_dat_out'range) )  is
         begin
-            
+
             wait until rising_edge(clk);
             wb_adr_in <= address;
             wb_we_in <= '1';
@@ -252,7 +252,7 @@ begin
             wb_cyc_in <= '0';
            --wait for clk_period;
         end procedure;
-        
+
         procedure uart_tx(byte:t_byte) is
         variable status : std_logic_vector(31 downto 0);
         begin
@@ -265,7 +265,7 @@ begin
 
       variable status,rx_byte,ctl : std_logic_vector(31 downto 0);
       variable s: string(1 to 1);
-      file l_file: TEXT; 
+      file l_file: TEXT;
 
 
     begin
@@ -279,22 +279,22 @@ begin
         uart_write("1",ctl);  -- Initalize UART
 
         --receive loop
-        while not finish loop
+        while not receive_test_finish loop
           -- Check Status Register
            status := (others=>'0');
-           while status(0)='0'  and not finish loop -- check ready bit (bit 0)
+           while status(0)='0'  and not receive_test_finish loop -- check ready bit (bit 0)
              uart_read("1",status);
            end loop;
            -- Get byte
            if status(0)='1' then
              uart_read("0",rx_byte);
              write_byte(l_file,rx_byte(7 downto 0));
-           end if;  
+           end if;
        end loop;
-       
+
        file_close(l_file);
        print("Receive Simulation finished");
-      
+
 
        -- UART Send Simulation
        for i in 1 to TestStr'length loop
