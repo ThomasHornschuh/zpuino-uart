@@ -35,7 +35,8 @@
 
 library IEEE;
 use IEEE.std_logic_1164.all;
-use IEEE.std_logic_unsigned.all;
+use ieee.numeric_std.all;
+
 
 entity uart_brgen is
   port (
@@ -57,11 +58,11 @@ begin
     if rising_edge(clk) then
       clkout <= '0';
       if rst='1' then
-        cnt <= conv_integer(count);
+        cnt <= to_integer(unsigned(count));
       elsif en='1' then
         if cnt=0 then
           clkout <= '1';
-          cnt <= conv_integer(count);
+          cnt <= to_integer(unsigned(count));
         else
           cnt <= cnt - 1;
         end if;

@@ -238,7 +238,7 @@ begin
       when '1' =>
         wb_dat_o <= (others => 'U');
         wb_dat_o(0) <= not fifo_empty;
-        wb_dat_o(1) <= uart_busy;
+        wb_dat_o(1) <= not uart_busy;
         wb_dat_o(2) <= uart_intx;
       when '0' =>
         wb_dat_o <= (others => '0');
