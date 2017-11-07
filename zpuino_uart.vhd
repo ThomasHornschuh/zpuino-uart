@@ -69,7 +69,7 @@ architecture behave of zpuino_uart is
   component uart_rx is
   port (
     clk:      in std_logic;
-        rst:      in std_logic;
+    rst:      in std_logic;
     rx:       in std_logic;
     rxclk:    in std_logic;
     read:     in std_logic;
@@ -122,7 +122,7 @@ architecture behave of zpuino_uart is
   signal uart_write: std_logic;
   signal divider_tx: std_logic_vector(15 downto 0) := x"000f";
 
-  signal divider_rx_q: std_logic_vector(15 downto 0);
+  signal divider_rx_q: std_logic_vector(15 downto 0) :=(others=>'0');
 
   signal data_ready: std_logic;
   signal received_data: std_logic_vector(7 downto 0);

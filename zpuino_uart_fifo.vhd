@@ -59,8 +59,8 @@ architecture behave of zpuino_uart_fifo is
 
   signal memory:  mem_t;
 
-  signal wraddr: unsigned(bits-1 downto 0);
-  signal rdaddr: unsigned(bits-1 downto 0);
+  signal wraddr: unsigned(bits-1 downto 0) := (others => '0');
+  signal rdaddr: unsigned(bits-1 downto 0) := (others => '0');
 
 begin
 

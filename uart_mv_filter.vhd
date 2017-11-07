@@ -56,7 +56,7 @@ end entity uart_mv_filter;
 
 architecture behave of uart_mv_filter is
 
-signal count_q: unsigned(bits-1 downto 0);
+signal count_q: unsigned(bits-1 downto 0) := (others => '0');
 
 begin
 
