@@ -31,7 +31,64 @@
 --  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 --  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
+--UART Registers Decsription
+
+
+--//    |--------------------|--------------------------------------------|
+--//--! | Address(binary)    | Description                                |
+--//--! |--------------------|--------------------------------------------|
+--//--! | 00                 | Transmit register(W)/  Receive register(R) |
+--//--! | 01                 | Status(R)) and control(W) register         |
+--//--! |--------------------|--------------------------------------------|
 --
+--  The Status/Control register is used as Status Register when read,
+--  and as Control register when written
+--//--! The status register contains the following bits:
+--//--! - Bit 0: UART RX Ready bit. Reads as 1 when there's received data in FIFO, 0 otherwise.
+--//--! - Bit 1: UART TX Ready bit. Reads as 1 when there's space in TX FIFO for transmission, 0 otherwise.
+--//--! - Bit 2: TX in progess
+--
+--// Control register:
+--// Bit [15:0] - UARTPRES UART prescaler (16 bits)   (f_clk / (baudrate * 16)) - 1
+--// Bit 16 - UARTEN UARTEN bit controls whether UART is enabled or not
+
+-- Addtional register when running in extended Mode the UART contains the following  registers/bits
+
+--//    |--------------------|--------------------------------------------|
+--//--! | Address            | Description                                |
+--//--! |--------------------|--------------------------------------------|
+--//--! | 00                 | Transmit register(W)/  Receive register(R) |
+--//--! | 01                 | Status(R)) and control(W) register         |
+--//--! | 10                 | Extended Control Register  (RW)            |
+--//--! | 11                 | Interrupt Register  (RW)                   |
+--//--! |--------------------|--------------------------------------------|
+
+--// Extended Control register:
+--// Bit [15:0] - UARTPRES UART prescaler (16 bits)   (f_clk / (baudrate * 16)) - 1
+--// Bit 16 - UARTEN UARTEN bit controls whether UART is enabled or not
+--// Bit 17 - EXT_EN: Enable extended mode - when set one the extended mode is activated
+--// Bit [31..18] - FIFO "Nearly Full" Threshold. The number of bits actual used depends on the confirued FIFO size
+
+--// Status/ Control Register:
+--// When written, it works as control register, but limited to bit 16..0, so it is compatible with the non-extended mode
+--// When read it works as statzs register:
+
+--//--! The status register contains the following bits:
+--//--! - Bit 0: UART RX Ready bit. Reads as 1 when there's received data in FIFO, 0 otherwise.
+--//--! - Bit 1: UART TX Ready bit. Reads as 1 when there's space in TX FIFO for transmission, 0 otherwise.
+--//--! - Bit 2: TX in progess
+--//--! - Bit 3: UART RX FIFO occupation > threshold. This bit is only set when the extended mode is activated
+--//--! - Bit[19..16]: log(2) FIFO Length (Number of bits of FIFO address)
+
+
+--//--! Interrupt Register (R/W) (only visible in extended mode)
+--//--! Bit 0 : Enable RX Interrupt
+--//--! Bit 1 : Enable TX Interrupt
+--//--! Bit 3 : Enable FIFO Nearly Full Interrupt
+--//--! Bit 16 : R: RX Interrupt Pending W: Writing 1 will clear this pending bit
+--//--! Bit 17 : R: TX Interrupt Pending W: Writing 1 will clear this pending bit
+--//--! Bit 19 : R: RX FIFO Nearly Full Interrupt Pending W: Writing 1 will clear this pending bit
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -43,8 +100,9 @@ entity zpuino_uart is
   generic (
     bits: integer := 11; -- log2 of FIFO depth
     wordSize : natural := 32; -- Bus width
-    maxIObit : natural := 2;  -- Adr bus  high
-    minIObit : natural := 2   -- Adr bus  low
+    maxIObit : natural := 3;  -- Adr bus  high
+    minIObit : natural := 2;   -- Adr bus  low
+    extended : boolean := false -- TH: TRUE: Activate extended version
   );
   port (
     wb_clk_i: in std_logic;
@@ -113,7 +171,8 @@ architecture behave of zpuino_uart is
     write:    in std_logic_vector(7 downto 0);
     read :    out std_logic_vector(7 downto 0);
     full:     out std_logic;
-    empty:    out std_logic
+    empty:    out std_logic;
+    used_o:   out unsigned(bits-1 downto 0)
   );
   end component zpuino_uart_fifo;
 
@@ -139,7 +198,45 @@ architecture behave of zpuino_uart is
   signal fifo_rd: std_logic;
   signal enabled_q: std_logic;
 
+  signal rx_fifo_used : unsigned(bits-1 downto 0);
+
+  signal Adr0Selected: std_logic;
+
+
+
+-- Extended Mode register bits
+
+  signal ext_mode_en : std_logic := '0';
+  signal fifo_threshold : std_logic_vector(bits-1 downto 0) := (others=>'0');
+
+  signal rx_int_en : std_logic := '0';
+  signal tx_int_en : std_logic := '0';
+  signal fifo_int_en : std_logic := '0';
+
+  signal rx_int_pending : std_logic := '0';
+  signal tx_int_pending : std_logic := '0';
+  signal fifo_int_pending : std_logic := '0';
+
+
+  signal rx_rdy, tx_rdy,fifo_nf : std_logic; -- Status Bits
+  signal rx_rdy0, tx_rdy0, fifo_nf0 : std_logic; -- old value for edge detection
+
 begin
+
+
+  -- Adress decoder for RX/TX Register
+  process(wb_adr_i) begin
+
+    if extended and wb_adr_i(minIObit+1 downto minIObit)="00" then
+       Adr0Selected <='1';
+    elsif not extended and wb_adr_i(minIObit)='0' then
+       Adr0Selected <='1';
+    else
+       Adr0Selected <='0';
+    end if;
+
+  end process;
+
 
   enabled <= enabled_q;
   wb_inta_o <= '0';
@@ -172,7 +269,7 @@ begin
     );
 
   -- TODO: check multiple writes
-  uart_write <= '1' when (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1') and wb_adr_i(minIObit)='0' else '0';
+  uart_write <= '1' when (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1') and Adr0Selected='1' else '0';
 
    -- Rx timing
   rx_timer: uart_brgen
@@ -226,42 +323,135 @@ begin
       write => received_data,
       read  => fifo_data,
       full  => open,
-      empty => fifo_empty
+      empty => fifo_empty,
+      used_o => rx_fifo_used
     );
 
 
-  fifo_rd<='1' when wb_adr_i(minIObit)='0' and (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='0') else '0';
+  fifo_rd<='1' when Adr0Selected='1' and (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='0') else '0';
 
-  process(wb_adr_i, received_data, uart_busy, data_ready, fifo_empty, fifo_data,uart_intx)
+
+-- Status Bits
+
+   fifo_nf <= '1' when rx_fifo_used > unsigned(fifo_threshold) else '0';
+   rx_rdy  <= not fifo_empty;
+   tx_rdy  <= not uart_busy;
+
+-- For change detection
+   process(wb_clk_i) begin
+     if rising_edge(wb_clk_i) then
+       fifo_nf0 <= fifo_nf;
+       rx_rdy0 <= rx_rdy;
+       tx_rdy0 <= tx_rdy;
+     end if;
+   end process;
+
+
+
+  process(wb_adr_i, received_data,  fifo_data,uart_intx,ext_mode_en,
+          fifo_nf,tx_rdy,rx_rdy,enabled_q,fifo_threshold,rx_int_en,tx_int_en,fifo_int_en,
+          rx_int_pending,tx_int_pending,fifo_int_pending)
+  variable adr : std_logic_vector(1 downto 0);
   begin
-    case wb_adr_i(2) is
-      when '1' =>
-        wb_dat_o <= (others => 'U');
-        wb_dat_o(0) <= not fifo_empty;
-        wb_dat_o(1) <= not uart_busy;
-        wb_dat_o(2) <= uart_intx;
-      when '0' =>
+    if extended then
+       adr:= wb_adr_i(minIObit+1 downto minIObit);
+    else
+      adr:= '0' & wb_adr_i(minIObit);
+    end if;
+
+    wb_dat_o <= (others => 'U');
+    case adr is
+      when "00" => -- Read RX Register
         wb_dat_o <= (others => '0');
         wb_dat_o(7 downto 0) <= fifo_data;
+
+      when "01" => -- Read Status Register
+        wb_dat_o(0) <= rx_rdy;
+        wb_dat_o(1) <= tx_rdy;
+        wb_dat_o(2) <= uart_intx;
+        if ext_mode_en='1' then
+          wb_dat_o (3) <= fifo_nf;
+          wb_dat_o(19 downto 16) <=std_logic_vector(to_unsigned(bits,4));
+        end if;
+
+      when "10" =>  -- Read Extended Control Register
+        wb_dat_o(15 downto 0) <= divider_rx_q;
+        wb_dat_o(16) <= enabled_q;
+        wb_dat_o(17) <= ext_mode_en;
+        wb_dat_o(18+fifo_threshold'high downto 18) <= fifo_threshold;
+
+      when "11" => -- Read Interrupt Register
+        if ext_mode_en='1' then
+          wb_dat_o(0) <=rx_int_en;
+          wb_dat_o(1) <=tx_int_en;
+          wb_dat_o(3) <=fifo_int_en;
+          wb_dat_o(16) <=rx_int_pending;
+          wb_dat_o(17) <=tx_int_pending;
+          wb_dat_o(18) <=fifo_int_pending;
+        end if;
+
+
       when others =>
         wb_dat_o <= (others => 'X');
     end case;
+
   end process;
 
   process(wb_clk_i)
+  variable adr : std_logic_vector(1 downto 0);
   begin
+
     if rising_edge(wb_clk_i) then
       if wb_rst_i='1' then
         enabled_q<='0';
       else
-        if wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1' then
-          if wb_adr_i(minIObit)='1' then
-            divider_rx_q <= wb_dat_i(15 downto 0);
-            enabled_q  <= wb_dat_i(16);
-          end if;
+
+        -- Interrupt detection
+        if rx_int_en='1' and rx_rdy='1' and rx_rdy0='0' then
+          rx_int_pending <= '1';
         end if;
+        if tx_int_en='1' and tx_rdy='1' and tx_rdy0='0' then
+          tx_int_pending <= '1';
+        end if;
+        if fifo_int_en='1' and fifo_nf='1' and fifo_nf0='0' then
+          fifo_int_pending <= '1';
+        end if;
+
+        -- Register Write
+        if wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1' then
+            if extended then
+              adr:= wb_adr_i(minIObit+1 downto minIObit);
+            else
+              adr:= '0' & wb_adr_i(minIObit);
+            end if;
+
+            if adr="01" or adr="10" then
+                divider_rx_q <= wb_dat_i(15 downto 0);
+                enabled_q  <= wb_dat_i(16);
+            end if;
+            if adr="10" then
+                ext_mode_en <= wb_dat_i(17);
+                fifo_threshold <= wb_dat_i(18+fifo_threshold'high downto 18);
+            end if;
+            if adr="11" then
+                rx_int_en <= wb_dat_i(0);
+                tx_int_en <= wb_dat_i(1);
+                fifo_int_en <= wb_dat_i(3);
+
+                if wb_dat_i(16)='1' then
+                  rx_int_pending<='0';
+                end if;
+                if wb_dat_i(17)='1' then
+                  tx_int_pending<='0';
+                end if;
+                if wb_dat_i(19)='1' then
+                  fifo_int_pending<='0';
+                end if;
+            end if;
+         end if; -- bus cycle
       end if;
     end if;
+
   end process;
 
 end behave;

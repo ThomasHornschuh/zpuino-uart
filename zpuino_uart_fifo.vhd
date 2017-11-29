@@ -49,7 +49,8 @@ entity zpuino_uart_fifo is
     write:    in std_logic_vector(datawidth-1 downto 0);
     read :    out std_logic_vector(datawidth-1 downto 0);
     full:     out std_logic;
-    empty:    out std_logic
+    empty:    out std_logic;
+    used_o:   out unsigned(bits-1 downto 0) -- TH: Number of words actually used
   );
 end entity zpuino_uart_fifo;
 
@@ -61,8 +62,12 @@ architecture behave of zpuino_uart_fifo is
 
   signal wraddr: unsigned(bits-1 downto 0) := (others => '0');
   signal rdaddr: unsigned(bits-1 downto 0) := (others => '0');
+  
+  signal used : unsigned(bits-1 downto 0) := (others => '0');
 
 begin
+
+  used_o <= used;
 
   process(clk)
   begin
@@ -74,6 +79,7 @@ begin
   process(clk,rdaddr,wraddr,rst)
     variable full_v: std_logic;
     variable empty_v: std_logic;
+  
   begin
 
     if rdaddr=wraddr then
@@ -92,6 +98,7 @@ begin
       if rst='1' then
         wraddr <= (others => '0');
         rdaddr <= (others => '0');
+        used <= (others => '0');
       else
 
         if wr='1' and full_v='0' then
@@ -101,14 +108,14 @@ begin
 
         if rd='1' and empty_v='0' then
           rdaddr <= rdaddr+1;
-        end if;
+        end if;       
       end if;
-
-      full <= full_v;
-      empty <= empty_v;
-
     end if;
-
+    
+    -- combinatorical...
+    used <= wraddr - rdaddr;
+    full <= full_v;
+    empty <= empty_v;
 
   end process;
 end behave;

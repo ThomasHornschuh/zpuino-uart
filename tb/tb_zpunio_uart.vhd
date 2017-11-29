@@ -64,7 +64,7 @@ architecture testbench of tb_zpunio_uart is
     signal irq : std_logic;
 
     -- Wishbone ports:
-    signal wb_adr_in  : std_logic_vector(2 downto 2) := (others => '0');
+    signal wb_adr_in  : std_logic_vector(3 downto 2) := (others => '0');
     signal wb_dat_in  : std_logic_vector(31 downto 0) := (others => '0');
     signal wb_dat_out : std_logic_vector(31 downto 0);
     signal wb_we_in   : std_logic := '0';
@@ -107,7 +107,8 @@ begin
     uut: entity work.zpuino_uart
     generic map (
        bits => log2(32),
-       wordSize =>wb_dat_out'length
+       wordSize =>wb_dat_out'length,
+       extended => true
     )
 
      PORT MAP (
@@ -258,9 +259,9 @@ begin
         begin
            status:=(others=>'U');
            while status(1)/='1'  loop
-             uart_read("1",status);
+             uart_read("01",status);
            end loop;
-           uart_write("0",X"000000" & byte);
+           uart_write("00",X"000000" & byte);
         end;
 
       variable status,rx_byte,ctl : std_logic_vector(31 downto 0);
@@ -276,18 +277,18 @@ begin
         ctl(15 downto 0):=std_logic_vector(to_unsigned(51,16)); -- Divisor 51 for 115200 Baud
         ctl(16):='1';
 
-        uart_write("1",ctl);  -- Initalize UART
+        uart_write("01",ctl);  -- Initalize UART
 
         --receive loop
         while not receive_test_finish loop
           -- Check Status Register
            status := (others=>'0');
            while status(0)='0'  and not receive_test_finish loop -- check ready bit (bit 0)
-             uart_read("1",status);
+             uart_read("01",status);
            end loop;
            -- Get byte
            if status(0)='1' then
-             uart_read("0",rx_byte);
+             uart_read("00",rx_byte);
              write_byte(l_file,rx_byte(7 downto 0));
            end if;
        end loop;
