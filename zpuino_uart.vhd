@@ -69,9 +69,9 @@
 --// Bit 17 - EXT_EN: Enable extended mode - when set one the extended mode is activated
 --// Bit [31..18] - FIFO "Nearly Full" Threshold. The number of bits actual used depends on the confirued FIFO size
 
---// Status/ Control Register:
+--// Status(R)/ Control(W) Register:
 --// When written, it works as control register, but limited to bit 16..0, so it is compatible with the non-extended mode
---// When read it works as statzs register:
+--// When read it works as status register:
 
 --//--! The status register contains the following bits:
 --//--! - Bit 0: UART RX Ready bit. Reads as 1 when there's received data in FIFO, 0 otherwise.
@@ -239,9 +239,10 @@ begin
 
 
   enabled <= enabled_q;
-  wb_inta_o <= '0';
   wb_ack_o <= wb_cyc_i and wb_stb_i;
   id <= x"08" & x"11"; -- Vendor: ZPUino  Device: UART
+  
+  wb_inta_o <= rx_int_pending or tx_int_pending or fifo_int_pending;
 
   rx_inst: uart_rx
     port map(
@@ -348,7 +349,7 @@ begin
 
 
 
-  process(wb_adr_i, received_data,  fifo_data,uart_intx,ext_mode_en,
+  process(wb_adr_i, received_data,  fifo_data,uart_intx,ext_mode_en,divider_rx_q,
           fifo_nf,tx_rdy,rx_rdy,enabled_q,fifo_threshold,rx_int_en,tx_int_en,fifo_int_en,
           rx_int_pending,tx_int_pending,fifo_int_pending)
   variable adr : std_logic_vector(1 downto 0);
@@ -359,7 +360,7 @@ begin
       adr:= '0' & wb_adr_i(minIObit);
     end if;
 
-    wb_dat_o <= (others => 'U');
+    wb_dat_o <= (others => '0');
     case adr is
       when "00" => -- Read RX Register
         wb_dat_o <= (others => '0');
@@ -371,7 +372,7 @@ begin
         wb_dat_o(2) <= uart_intx;
         if ext_mode_en='1' then
           wb_dat_o (3) <= fifo_nf;
-          wb_dat_o(19 downto 16) <=std_logic_vector(to_unsigned(bits,4));
+          wb_dat_o(19 downto 16) <=std_logic_vector(to_unsigned(bits,4));  
         end if;
 
       when "10" =>  -- Read Extended Control Register
@@ -387,7 +388,7 @@ begin
           wb_dat_o(3) <=fifo_int_en;
           wb_dat_o(16) <=rx_int_pending;
           wb_dat_o(17) <=tx_int_pending;
-          wb_dat_o(18) <=fifo_int_pending;
+          wb_dat_o(19) <=fifo_int_pending;
         end if;
 
 
