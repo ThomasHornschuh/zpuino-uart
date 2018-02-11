@@ -47,7 +47,8 @@ entity uart_rx is
     rxclk:    in std_logic;
     read:     in std_logic;
     data:     out std_logic_vector(7 downto 0);
-    data_av:  out std_logic
+    data_av:  out std_logic;
+    framing_error : out std_logic
   );
 end entity uart_rx;
 
@@ -92,6 +93,10 @@ signal start: std_logic;
 signal debug_synctick_q: std_logic;
 signal debug_baudreset_q: std_logic;
 
+
+
+ 
+
 -- State
 type uartrxstate is (
   rx_idle,
@@ -102,6 +107,19 @@ type uartrxstate is (
 
 signal state: uartrxstate;
 
+attribute mark_debug : string;
+attribute mark_debug of state : signal is "true";
+attribute mark_debug of start : signal is "true";
+attribute mark_debug of baudtick : signal is "true";
+attribute mark_debug of baudreset : signal is "true";
+attribute mark_debug of rx : signal is "true";
+attribute mark_debug of rxf : signal is "true";
+attribute mark_debug of filterreset : signal is "true";
+attribute mark_debug of rxclk : signal is "true";
+attribute mark_debug of rxd : signal is "true";
+attribute mark_debug of framing_error : signal is "true";
+
+
 begin
 
   data <= datao;
@@ -110,7 +128,7 @@ begin
   rxmvfilter: uart_mv_filter
   generic map (
     bits => 4,
-    threshold => 10
+    threshold => 7
   )
   port map (
     clk     => clk,
@@ -180,12 +198,16 @@ begin
           -- Do fast recovery here.
           if rxf='1' then
             dataready<='1';
+            framing_error <='0';
             datao <= rxd;
             state <= rx_idle;
           end if;
 
           if baudtick='1' then
             -- Framing error.
+            dataready <= '1';
+            datao <= rxd;
+            framing_error <='1';
             state <= rx_idle;
           end if;
         when others =>

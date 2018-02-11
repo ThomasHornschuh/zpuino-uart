@@ -63,11 +63,21 @@
 --//--! | 11                 | Interrupt Register  (RW)                   |
 --//--! |--------------------|--------------------------------------------|
 
+--// Transmit Reigtser:
+--// Bit[7:0] : Byte to be transmitted
+
+--// Receive Register:
+--// Bit[7:0] : Received Byte
+--// Bit[30:8]: Currently all 0, but reserved for future use in extended mode
+--// Bit[31]  : When in extented mode, this bit is set when a framing error was encountered upon receving the byte
+--//            in non-extended mode this bit is 0
+
+
 --// Extended Control register:
 --// Bit [15:0] - UARTPRES UART prescaler (16 bits)   (f_clk / (baudrate * 16)) - 1
 --// Bit 16 - UARTEN UARTEN bit controls whether UART is enabled or not
 --// Bit 17 - EXT_EN: Enable extended mode - when set one the extended mode is activated
---// Bit [31..18] - FIFO "Nearly Full" Threshold. The number of bits actual used depends on the confirued FIFO size
+--// Bit [31:18] - FIFO "Nearly Full" Threshold. The number of bits actual used depends on the confirued FIFO size
 
 --// Status(R)/ Control(W) Register:
 --// When written, it works as control register, but limited to bit 16..0, so it is compatible with the non-extended mode
@@ -78,7 +88,7 @@
 --//--! - Bit 1: UART TX Ready bit. Reads as 1 when there's space in TX FIFO for transmission, 0 otherwise.
 --//--! - Bit 2: TX in progess
 --//--! - Bit 3: UART RX FIFO occupation > threshold. This bit is only set when the extended mode is activated
---//--! - Bit[19..16]: log(2) FIFO Length (Number of bits of FIFO address)
+--//--! - Bit[19:16]: log(2) FIFO Length (Number of bits of FIFO address)
 
 
 --//--! Interrupt Register (R/W) (only visible in extended mode)
@@ -106,7 +116,7 @@ entity zpuino_uart is
   );
   port (
     wb_clk_i: in std_logic;
-     wb_rst_i: in std_logic;
+    wb_rst_i: in std_logic;
     wb_dat_o: out std_logic_vector(wordSize-1 downto 0);
     wb_dat_i: in std_logic_vector(wordSize-1 downto 0);
     wb_adr_i: in std_logic_vector(maxIObit downto minIObit);
@@ -124,6 +134,28 @@ end entity zpuino_uart;
 
 architecture behave of zpuino_uart is
 
+-- Attribute Infos for Xilinx Vivado IP Integrator Block designs
+-- Should not have negative influence on other platforms. 
+
+ATTRIBUTE X_INTERFACE_INFO : STRING;
+ATTRIBUTE X_INTERFACE_INFO of  wb_clk_i : SIGNAL is "xilinx.com:signal:clock:1.0 wb_clk_i CLK";
+--X_INTERFACE_INFO of  wb_rst_i : SIGNAL is "xilinx.com:signal:reset:1.0 wb_rst_i RESET";
+
+ATTRIBUTE X_INTERFACE_PARAMETER : STRING;
+ATTRIBUTE X_INTERFACE_PARAMETER of wb_clk_i : SIGNAL is "ASSOCIATED_BUSIF WB_SLAVE";
+--ATTRIBUTE X_INTERFACE_PARAMETER of rst_i : SIGNAL is "ASSOCIATED_BUSIF WB_DB";
+
+ATTRIBUTE X_INTERFACE_INFO OF wb_cyc_i: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_cyc_o";
+ATTRIBUTE X_INTERFACE_INFO OF wb_stb_i: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_stb_o";
+ATTRIBUTE X_INTERFACE_INFO OF wb_we_i: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0  WB_SLAVE wb_dbus_we_o";
+ATTRIBUTE X_INTERFACE_INFO OF wb_ack_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_ack_i";
+ATTRIBUTE X_INTERFACE_INFO OF wb_adr_i: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_adr_o";
+ATTRIBUTE X_INTERFACE_INFO OF wb_dat_i: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_dat_o";
+ATTRIBUTE X_INTERFACE_INFO OF wb_dat_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_dat_i";
+
+
+
+
   component uart_rx is
   port (
     clk:      in std_logic;
@@ -132,7 +164,8 @@ architecture behave of zpuino_uart is
     rxclk:    in std_logic;
     read:     in std_logic;
     data:     out std_logic_vector(7 downto 0);
-    data_av:  out std_logic
+    data_av:  out std_logic;
+    framing_error : out std_logic
   );
   end component uart_rx;
 
@@ -161,15 +194,16 @@ architecture behave of zpuino_uart is
 
   component zpuino_uart_fifo is
   generic (
-    bits: integer := 11
+    bits: integer := 11;
+    datawidth: integer := 8
   );
   port (
     clk:      in std_logic;
     rst:      in std_logic;
     wr:       in std_logic;
     rd:       in std_logic;
-    write:    in std_logic_vector(7 downto 0);
-    read :    out std_logic_vector(7 downto 0);
+    write:    in std_logic_vector(datawidth-1  downto 0);
+    read :    out std_logic_vector(datawidth-1 downto 0);
     full:     out std_logic;
     empty:    out std_logic;
     used_o:   out unsigned(bits-1 downto 0)
@@ -185,7 +219,8 @@ architecture behave of zpuino_uart is
 
   signal data_ready: std_logic;
   signal received_data: std_logic_vector(7 downto 0);
-  signal fifo_data: std_logic_vector(7 downto 0);
+  signal fifo_received_data : std_logic_vector(8 downto 0);
+  signal fifo_data: std_logic_vector(8 downto 0);
   signal uart_busy: std_logic;
   signal uart_intx: std_logic;
   signal fifo_empty: std_logic;
@@ -201,6 +236,8 @@ architecture behave of zpuino_uart is
   signal rx_fifo_used : unsigned(bits-1 downto 0);
 
   signal Adr0Selected: std_logic;
+  
+  signal framing_error : std_logic;
 
 
 
@@ -220,6 +257,16 @@ architecture behave of zpuino_uart is
 
   signal rx_rdy, tx_rdy,fifo_nf : std_logic; -- Status Bits
   signal rx_rdy0, tx_rdy0, fifo_nf0 : std_logic; -- old value for edge detection
+  
+  attribute mark_debug : string;
+  attribute mark_debug of rx_rdy : signal is "true";
+  attribute mark_debug of tx_rdy : signal is "true";
+  attribute mark_debug of data_ready : signal is "true";
+  attribute mark_debug of received_data : signal is "true";
+  
+  attribute mark_debug of wb_cyc_i : signal is "true";
+  attribute mark_debug of wb_adr_i : signal is "true";
+  attribute mark_debug of wb_dat_o : signal is "true";
 
 begin
 
@@ -252,8 +299,11 @@ begin
       read    => uart_read,
       rx      => rx,
       data_av => data_ready,
-      data    => received_data
+      data    => received_data,
+      framing_error => framing_error
    );
+
+   fifo_received_data <= framing_error & received_data;
 
   uart_read <= dready_q;
 
@@ -314,14 +364,15 @@ begin
 
   fifo_instance: zpuino_uart_fifo
     generic map (
-      bits => bits
+      bits => bits,
+      datawidth => 9
     )
     port map (
       clk   => wb_clk_i,
       rst   => wb_rst_i,
       wr    => dready_q,
       rd    => fifo_rd,
-      write => received_data,
+      write => fifo_received_data,
       read  => fifo_data,
       full  => open,
       empty => fifo_empty,
@@ -364,7 +415,10 @@ begin
     case adr is
       when "00" => -- Read RX Register
         wb_dat_o <= (others => '0');
-        wb_dat_o(7 downto 0) <= fifo_data;
+        wb_dat_o(7 downto 0) <= fifo_data(7 downto 0);
+        if ext_mode_en='1' then -- Read Framing error bit in extented mode
+          wb_dat_o(wb_dat_o'high)<=fifo_data(8);
+        end if;
 
       when "01" => -- Read Status Register
         wb_dat_o(0) <= rx_rdy;
