@@ -42,7 +42,8 @@ library work;
 entity uart_mv_filter is
   generic (
     bits: natural;
-    threshold: natural
+    sample_min : natural;
+    sample_max : natural
   );
   port (
     clk:      in std_logic;
@@ -56,7 +57,10 @@ end entity uart_mv_filter;
 
 architecture behave of uart_mv_filter is
 
+constant threshold : natural := sample_max-sample_min;
+
 signal count_q: unsigned(bits-1 downto 0) := (others => '0');
+signal count_s: unsigned(bits-1 downto 0) := (others => '0'); -- Start timer
 
 begin
 
@@ -69,10 +73,14 @@ begin
     else
       if clear='1' then
         count_q <= (others => '0');
+        count_s <= (others => '0');
         sout <= '0';
       else
         if enable='1' then
-          if sin='1' then
+          -- Wait until sample_min ticks passed
+          if count_s<sample_min then
+            count_s <= count_s + 1;  
+          elsif sin='1' then
             count_q <= count_q + 1;
           end if;
         end if;

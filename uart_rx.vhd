@@ -57,7 +57,8 @@ architecture behave of uart_rx is
   component uart_mv_filter is
   generic (
     bits: natural;
-    threshold: natural
+    sample_min : natural;
+    sample_max : natural
   );
   port (
     clk:      in std_logic;
@@ -128,7 +129,8 @@ begin
   rxmvfilter: uart_mv_filter
   generic map (
     bits => 4,
-    threshold => 7
+    sample_min => 6,
+    sample_max => 9
   )
   port map (
     clk     => clk,

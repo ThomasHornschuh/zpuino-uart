@@ -33,6 +33,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 USE ieee.numeric_std.ALL;
+use IEEE.MATH_REAL.ALL;
 
 library STD;
 use STD.textio.all;
@@ -48,7 +49,9 @@ architecture testbench of tb_zpunio_uart is
 
     -- Clock signal:
     signal clk : std_logic := '0';
-    constant clk_period : time := 10.41  ns;  --Clock 96Mhz
+    --constant clk_period : time := 10.41  ns;  --Clock 96Mhz
+    constant clk_period : time := 12  ns;  --Clock 83.3333Mhz
+    constant clk_frequency : natural := natural(1.0 / real(clk_period/ 1 ns) *10**9);
 
     signal TbClock : std_logic := '0';
     signal TbSimEnded : std_logic := '0';
@@ -76,8 +79,10 @@ architecture testbench of tb_zpunio_uart is
 
    subtype t_byte is std_logic_vector(7 downto 0);
 
-   constant baudrate : natural := 115200;
-   constant bit_time : time := 8.68 us;
+   --constant baudrate : natural := 115200;
+   constant baudrate : natural := 500000;
+   --constant bit_time : time := 8.68 us;
+   signal bit_time : time := 2.00 us;
    signal cbyte : t_byte;
    signal bitref : integer :=0;
 
@@ -172,9 +177,16 @@ begin
 
    begin
        wait for bit_time*10;
-       for i in 1 to 126 loop
-        send_byte(std_logic_vector(to_unsigned(i,8)));
-       end loop;
+      
+       --Optional "Clock drift" test 
+--       for i in 1 to 1000 loop
+--          send_byte(X"55");
+--          bit_time <= bit_time + 0.004us; -- drift bit time
+--       end loop;
+       
+        for i in 1 to 126 loop
+           send_byte(std_logic_vector(to_unsigned(i,8)));         
+        end loop;
 
 
        -- Send a string to the UART receiver pin
@@ -217,6 +229,9 @@ begin
 
 
     stimulus: process
+      variable divisor : natural;
+      variable count : natural;
+    
       procedure uart_write(address : in std_logic_vector(wb_adr_in'range); data : in std_logic_vector(wb_dat_in'range)) is
         begin
 
@@ -274,11 +289,13 @@ begin
         wait for clk_period * 2;
         reset <= '0';
         ctl:=(others=>'0');
-        ctl(15 downto 0):=std_logic_vector(to_unsigned(51,16)); -- Divisor 51 for 115200 Baud
-        ctl(16):='1';
+        divisor:= natural( real(clk_frequency) / real(baudrate*16)) - 1;
+        print("UART Divisor: " & str(divisor));
+        ctl(15 downto 0):=std_logic_vector(to_unsigned(divisor,16)); -- Divisor 51 for 115200 Baud
+        ctl(16):='1'; ctl(17):='1';
 
-        uart_write("01",ctl);  -- Initalize UART
-
+        uart_write("10",ctl);  -- Initalize UART
+        count:=1;
         --receive loop
         while not receive_test_finish loop
           -- Check Status Register
@@ -290,6 +307,10 @@ begin
            if status(0)='1' then
              uart_read("00",rx_byte);
              write_byte(l_file,rx_byte(7 downto 0));
+             if rx_byte(31)='1' then
+               print("Framing Error at position: " & str(count));
+             end if;
+             count:=count+1;
            end if;
        end loop;
 
