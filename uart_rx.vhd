@@ -1,23 +1,23 @@
 --
 --  UART for ZPUINO - Receiver unit
--- 
+--
 --  Copyright 2011 Alvaro Lopes <alvieboy@alvie.com>
--- 
+--
 --  Version: 1.0
--- 
+--
 --  The FreeBSD license
---  
+--
 --  Redistribution and use in source and binary forms, with or without
 --  modification, are permitted provided that the following conditions
 --  are met:
---  
+--
 --  1. Redistributions of source code must retain the above copyright
 --     notice, this list of conditions and the following disclaimer.
 --  2. Redistributions in binary form must reproduce the above
 --     copyright notice, this list of conditions and the following
 --     disclaimer in the documentation and/or other materials
 --     provided with the distribution.
---  
+--
 --  THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY
 --  EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
 --  THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
@@ -30,7 +30,7 @@
 --  STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 --  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 --  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
---  
+--
 --
 library ieee;
 use ieee.std_logic_1164.all;
@@ -42,7 +42,7 @@ library work;
 entity uart_rx is
   port (
     clk:      in std_logic;
-	 	rst:      in std_logic;
+        rst:      in std_logic;
     rx:       in std_logic;
     rxclk:    in std_logic;
     read:     in std_logic;
@@ -62,7 +62,7 @@ architecture behave of uart_rx is
   );
   port (
     clk:      in std_logic;
-	 	rst:      in std_logic;
+        rst:      in std_logic;
     sin:      in std_logic;
     sout:     out std_logic;
     clear:    in std_logic;
@@ -94,9 +94,6 @@ signal start: std_logic;
 signal debug_synctick_q: std_logic;
 signal debug_baudreset_q: std_logic;
 
-
-
- 
 
 -- State
 type uartrxstate is (

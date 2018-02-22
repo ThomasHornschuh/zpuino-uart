@@ -41,20 +41,23 @@ use STD.textio.all;
 use work.txt_util.all;
 use work.log2.all;
 
-entity tb_zpunio_uart is
-end entity tb_zpunio_uart;
+entity tb_zpuino_uart is
+generic (
+  clk_frequency_mhz : real := 96.0
+);
+end entity tb_zpuino_uart;
 
-architecture testbench of tb_zpunio_uart is
+architecture testbench of tb_zpuino_uart is
 
 
-    -- Clock signal:
-    signal clk : std_logic := '0';
-    --constant clk_period : time := 10.41  ns;  --Clock 96Mhz
-    constant clk_period : time := 12  ns;  --Clock 83.3333Mhz
-    constant clk_frequency : natural := natural(1.0 / real(clk_period/ 1 ns) *10**9);
+    constant clk_period : time := (1.0 / clk_frequency_mhz * real(10**6)) * 1 ps;
+    constant clk_frequency : natural := natural( clk_frequency_mhz * real(10**6));
 
     signal TbClock : std_logic := '0';
     signal TbSimEnded : std_logic := '0';
+
+     -- Clock signal:
+    signal clk : std_logic := '0';
 
     -- Reset signal:
     signal reset : std_logic := '1';
@@ -85,11 +88,18 @@ architecture testbench of tb_zpunio_uart is
    signal bit_time : time := 2.00 us;
    signal cbyte : t_byte;
    signal bitref : integer :=0;
+   
+   signal framing_errors :  natural;
+   signal total_count :  natural;
+
+   
 
    signal receive_test_finish : boolean := false;
+   signal send_test_finish : boolean := false;
 
    constant log_file : string := "receive.log";
    constant send_logfile : string := "send.log";
+   
 
 
    procedure write_byte(file f: TEXT; c:t_byte) is
@@ -103,10 +113,42 @@ architecture testbench of tb_zpunio_uart is
        write(f,"x" & hstr(c)); -- non printable char
      end if;
    end;
+   
+  
 
 
 begin
 
+   
+
+    Inst_tb_uart_capture_tx: entity work.tb_uart_capture_tx 
+    GENERIC MAP (
+      SEND_LOG_NAME => send_logfile,
+      baudrate => baudrate,
+      bit_time => bit_time,
+      stop_mark => X"1A"
+    )
+    PORT MAP(
+		txd => txd,
+		stop => send_test_finish,
+		framing_errors => framing_errors,
+		total_count => total_count
+	 );
+    
+    
+    wait_send : process(send_test_finish)
+    begin
+      if send_test_finish then
+         print("Send Test finished Total Bytes : " & str(total_count) & " Framing errors: " & str(framing_errors));
+         assert framing_errors=0 
+            report "Send Test failed with framing errors"
+            severity error;
+            
+         TbSimEnded <= '1';
+      end if;
+    
+    end process;
+    
 
 
     uut: entity work.zpuino_uart
@@ -177,15 +219,15 @@ begin
 
    begin
        wait for bit_time*10;
-      
-       --Optional "Clock drift" test 
+
+       --Optional "Clock drift" test
 --       for i in 1 to 1000 loop
 --          send_byte(X"55");
 --          bit_time <= bit_time + 0.004us; -- drift bit time
 --       end loop;
-       
+
         for i in 1 to 126 loop
-           send_byte(std_logic_vector(to_unsigned(i,8)));         
+           send_byte(std_logic_vector(to_unsigned(i,8)));
         end loop;
 
 
@@ -198,40 +240,10 @@ begin
    end process;
 
 
-   capture_tx: process
-
-   file s_file: TEXT; -- open write_mode is send_logfile;
-   variable byte : t_byte;
-   begin
-     file_open(s_file,send_logfile,WRITE_MODE);
-     wait until txd='1'; -- Idle condition
-     byte:=(others=>'U');
-     while byte/=X"1A" loop -- Wait for End of File marker...
-       byte:=(others=>'U');
-       wait until txd='0';
-       wait for bit_time*1.5; -- Wait until midle of first data bit
-       for i in 0 to 7 loop
-         byte(i):=txd;
-         wait for bit_time;
-       end loop;
-       if txd='0' then
-         report "Framing error encountered"
-         severity warning;
-       end if;
-       write_byte(s_file,byte);
-     end loop;
-     file_close(s_file);
-     print("Send Simulation finished");
-     tbSimEnded<='1';
-     wait;
-   end process;
-
-
-
     stimulus: process
       variable divisor : natural;
       variable count : natural;
-    
+
       procedure uart_write(address : in std_logic_vector(wb_adr_in'range); data : in std_logic_vector(wb_dat_in'range)) is
         begin
 
@@ -289,6 +301,7 @@ begin
         wait for clk_period * 2;
         reset <= '0';
         ctl:=(others=>'0');
+        print("Clock Frequency: " & str(clk_frequency));
         divisor:= natural( real(clk_frequency) / real(baudrate*16)) - 1;
         print("UART Divisor: " & str(divisor));
         ctl(15 downto 0):=std_logic_vector(to_unsigned(divisor,16)); -- Divisor 51 for 115200 Baud
@@ -319,6 +332,9 @@ begin
 
 
        -- UART Send Simulation
+       for i in 1 to 5 loop
+          uart_tx(X"55");
+       end loop;
        for i in 1 to TestStr'length loop
           uart_tx(char_to_ascii_byte(TestStr(i)));
        end loop;

@@ -10,17 +10,17 @@ files = tx_unit.vhd uart_brgen.vhd uart_mv_filter.vhd uart_rx.vhd zpuino_uart.vh
 file_type=vhdlSource
 
 [fileset sim]
-files = tb/tb_zpunio_uart.vhd
+files = tb/tb_zpuino_uart.vhd
 file_type=vhdlSource
 #usage=sim
 scope = private
 
 [simulator]
-toplevel = tb_zpunio_uart
+toplevel = tb_zpuino_uart
 
 [ise]
 family = spartan6
 device = xc6slx9
 package = tqg144
 speed = -2
-top_module = zpuino_uart
+top_module = tb_zpuino_uart

@@ -63,7 +63,7 @@
 --//--! | 11                 | Interrupt Register  (RW)                   |
 --//--! |--------------------|--------------------------------------------|
 
---// Transmit Reigtser:
+--// Transmit Register:
 --// Bit[7:0] : Byte to be transmitted
 
 --// Receive Register:
@@ -132,10 +132,12 @@ entity zpuino_uart is
   );
 end entity zpuino_uart;
 
+
+
 architecture behave of zpuino_uart is
 
 -- Attribute Infos for Xilinx Vivado IP Integrator Block designs
--- Should not have negative influence on other platforms. 
+-- Should not have negative influence on other platforms.
 
 ATTRIBUTE X_INTERFACE_INFO : STRING;
 ATTRIBUTE X_INTERFACE_INFO of  wb_clk_i : SIGNAL is "xilinx.com:signal:clock:1.0 wb_clk_i CLK";
@@ -152,8 +154,6 @@ ATTRIBUTE X_INTERFACE_INFO OF wb_ack_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master
 ATTRIBUTE X_INTERFACE_INFO OF wb_adr_i: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_adr_o";
 ATTRIBUTE X_INTERFACE_INFO OF wb_dat_i: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_dat_o";
 ATTRIBUTE X_INTERFACE_INFO OF wb_dat_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_dat_i";
-
-
 
 
   component uart_rx is
@@ -236,7 +236,7 @@ ATTRIBUTE X_INTERFACE_INFO OF wb_dat_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master
   signal rx_fifo_used : unsigned(bits-1 downto 0);
 
   signal Adr0Selected: std_logic;
-  
+
   signal framing_error : std_logic;
 
 
@@ -257,13 +257,13 @@ ATTRIBUTE X_INTERFACE_INFO OF wb_dat_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master
 
   signal rx_rdy, tx_rdy,fifo_nf : std_logic; -- Status Bits
   signal rx_rdy0, tx_rdy0, fifo_nf0 : std_logic; -- old value for edge detection
-  
+
   attribute mark_debug : string;
   attribute mark_debug of rx_rdy : signal is "true";
   attribute mark_debug of tx_rdy : signal is "true";
   attribute mark_debug of data_ready : signal is "true";
   attribute mark_debug of received_data : signal is "true";
-  
+
   attribute mark_debug of wb_cyc_i : signal is "true";
   attribute mark_debug of wb_adr_i : signal is "true";
   attribute mark_debug of wb_dat_o : signal is "true";
@@ -288,7 +288,7 @@ begin
   enabled <= enabled_q;
   wb_ack_o <= wb_cyc_i and wb_stb_i;
   id <= x"08" & x"11"; -- Vendor: ZPUino  Device: UART
-  
+
   wb_inta_o <= rx_int_pending or tx_int_pending or fifo_int_pending;
 
   rx_inst: uart_rx
@@ -426,7 +426,7 @@ begin
         wb_dat_o(2) <= uart_intx;
         if ext_mode_en='1' then
           wb_dat_o (3) <= fifo_nf;
-          wb_dat_o(19 downto 16) <=std_logic_vector(to_unsigned(bits,4));  
+          wb_dat_o(19 downto 16) <=std_logic_vector(to_unsigned(bits,4));
         end if;
 
       when "10" =>  -- Read Extended Control Register
