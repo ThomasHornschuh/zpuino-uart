@@ -43,7 +43,8 @@ use work.log2.all;
 
 entity tb_zpuino_uart is
 generic (
-  clk_frequency_mhz : real := 96.0
+  clk_frequency_mhz : real := 96.0;
+  ext_mode : boolean := true
 );
 end entity tb_zpuino_uart;
 
@@ -85,21 +86,21 @@ architecture testbench of tb_zpuino_uart is
    --constant baudrate : natural := 115200;
    constant baudrate : natural := 500000;
    --constant bit_time : time := 8.68 us;
-   signal bit_time : time := 2.00 us;
+   constant bit_time : time := 2.00 us;
    signal cbyte : t_byte;
    signal bitref : integer :=0;
-   
+
    signal framing_errors :  natural;
    signal total_count :  natural;
 
-   
+
 
    signal receive_test_finish : boolean := false;
    signal send_test_finish : boolean := false;
 
    constant log_file : string := "receive.log";
    constant send_logfile : string := "send.log";
-   
+
 
 
    procedure write_byte(file f: TEXT; c:t_byte) is
@@ -113,15 +114,15 @@ architecture testbench of tb_zpuino_uart is
        write(f,"x" & hstr(c)); -- non printable char
      end if;
    end;
-   
-  
+
+
 
 
 begin
 
-   
 
-    Inst_tb_uart_capture_tx: entity work.tb_uart_capture_tx 
+
+    Inst_tb_uart_capture_tx: entity work.tb_uart_capture_tx
     GENERIC MAP (
       SEND_LOG_NAME => send_logfile,
       baudrate => baudrate,
@@ -129,26 +130,26 @@ begin
       stop_mark => X"1A"
     )
     PORT MAP(
-		txd => txd,
-		stop => send_test_finish,
-		framing_errors => framing_errors,
-		total_count => total_count
-	 );
-    
-    
+        txd => txd,
+        stop => send_test_finish,
+        framing_errors => framing_errors,
+        total_count => total_count
+     );
+
+
     wait_send : process(send_test_finish)
     begin
       if send_test_finish then
          print("Send Test finished Total Bytes : " & str(total_count) & " Framing errors: " & str(framing_errors));
-         assert framing_errors=0 
+         assert framing_errors=0
             report "Send Test failed with framing errors"
             severity error;
-            
+
          TbSimEnded <= '1';
       end if;
-    
+
     end process;
-    
+
 
 
     uut: entity work.zpuino_uart
@@ -302,10 +303,15 @@ begin
         reset <= '0';
         ctl:=(others=>'0');
         print("Clock Frequency: " & str(clk_frequency));
-        divisor:= natural( real(clk_frequency) / real(baudrate*16)) - 1;
+        if ext_mode then
+          divisor:= natural( real(clk_frequency) / real(baudrate)) - 1;
+          ctl(17):='1';
+        else
+          divisor:= natural( real(clk_frequency) / real(baudrate*16)) - 1;
+        end if;
         print("UART Divisor: " & str(divisor));
-        ctl(15 downto 0):=std_logic_vector(to_unsigned(divisor,16)); -- Divisor 51 for 115200 Baud
-        ctl(16):='1'; ctl(17):='1';
+        ctl(15 downto 0):=std_logic_vector(to_unsigned(divisor,16));
+        ctl(16):='1';
 
         uart_write("10",ctl);  -- Initalize UART
         count:=1;

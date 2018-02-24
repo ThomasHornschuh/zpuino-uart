@@ -74,7 +74,9 @@
 
 
 --// Extended Control register:
---// Bit [15:0] - UARTPRES UART prescaler (16 bits)   (f_clk / (baudrate * 16)) - 1
+--// Bit [15:0] - UARTPRES UART prescaler (16 bits)   (f_clk /baudrate) - 1
+--//              Requires Prescaler value >= 16 because of times 16 oversampling in receiver
+
 --// Bit 16 - UARTEN UARTEN bit controls whether UART is enabled or not
 --// Bit 17 - EXT_EN: Enable extended mode - when set one the extended mode is activated
 --// Bit [31:18] - FIFO "Nearly Full" Threshold. The number of bits actual used depends on the confirued FIFO size
@@ -213,9 +215,9 @@ ATTRIBUTE X_INTERFACE_INFO OF wb_dat_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master
 
   signal uart_read: std_logic;
   signal uart_write: std_logic;
-  signal divider_tx: std_logic_vector(15 downto 0) := x"000f";
+  signal divider_tx: std_logic_vector(15 downto 0) := (others=>'1');
 
-  signal divider_rx_q: std_logic_vector(15 downto 0) :=(others=>'0');
+  signal divider_rx_q: std_logic_vector(15 downto 0) :=(others=>'1');
 
   signal data_ready: std_logic;
   signal received_data: std_logic_vector(7 downto 0);
@@ -258,15 +260,15 @@ ATTRIBUTE X_INTERFACE_INFO OF wb_dat_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master
   signal rx_rdy, tx_rdy,fifo_nf : std_logic; -- Status Bits
   signal rx_rdy0, tx_rdy0, fifo_nf0 : std_logic; -- old value for edge detection
 
-  attribute mark_debug : string;
-  attribute mark_debug of rx_rdy : signal is "true";
-  attribute mark_debug of tx_rdy : signal is "true";
-  attribute mark_debug of data_ready : signal is "true";
-  attribute mark_debug of received_data : signal is "true";
-
-  attribute mark_debug of wb_cyc_i : signal is "true";
-  attribute mark_debug of wb_adr_i : signal is "true";
-  attribute mark_debug of wb_dat_o : signal is "true";
+--  attribute mark_debug : string;
+--  attribute mark_debug of rx_rdy : signal is "true";
+--  attribute mark_debug of tx_rdy : signal is "true";
+--  attribute mark_debug of data_ready : signal is "true";
+--  attribute mark_debug of received_data : signal is "true";
+--
+--  attribute mark_debug of wb_cyc_i : signal is "true";
+--  attribute mark_debug of wb_adr_i : signal is "true";
+--  attribute mark_debug of wb_dat_o : signal is "true";
 
 begin
 
@@ -337,7 +339,7 @@ begin
     port map(
       clk => wb_clk_i,
       rst => wb_rst_i,
-      en => rx_br,
+      en => '1',
       clkout => tx_br,
       count => divider_tx
     );
@@ -430,7 +432,7 @@ begin
         end if;
 
       when "10" =>  -- Read Extended Control Register
-        wb_dat_o(15 downto 0) <= divider_rx_q;
+        wb_dat_o(15 downto 0) <= divider_tx;
         wb_dat_o(16) <= enabled_q;
         wb_dat_o(17) <= ext_mode_en;
         wb_dat_o(18+fifo_threshold'high downto 18) <= fifo_threshold;
@@ -454,6 +456,8 @@ begin
 
   process(wb_clk_i)
   variable adr : std_logic_vector(1 downto 0);
+  variable tx_div : unsigned(divider_tx'range);
+  variable div16 : unsigned(11 downto 0);
   begin
 
     if rising_edge(wb_clk_i) then
@@ -480,15 +484,33 @@ begin
               adr:= '0' & wb_adr_i(minIObit);
             end if;
 
-            if adr="01" or adr="10" then
+            case  adr is
+              when "01" =>
+                -- Backwards compatible mode
+                -- Bit [15:0] - UARTPRES UART prescaler (16 bits)   (f_clk / (baudrate * 16)) - 1
+                -- Attention: Did not work when Bits[15:13] != 0 because it will cause an overflow
+                -- of the TX-Div
                 divider_rx_q <= wb_dat_i(15 downto 0);
+                tx_div:=resize((unsigned(wb_dat_i(11 downto 0))+1) & "0000" , tx_div'length);
+                divider_tx <= std_logic_vector(tx_div);
                 enabled_q  <= wb_dat_i(16);
-            end if;
-            if adr="10" then
+
+              when "10" =>
                 ext_mode_en <= wb_dat_i(17);
+                enabled_q  <= wb_dat_i(16);
                 fifo_threshold <= wb_dat_i(18+fifo_threshold'high downto 18);
-            end if;
-            if adr="11" then
+                -- Bit [15:0] - UARTPRES UART prescaler (16 bits)   (f_clk /baudrate) - 1
+                -- Requires Prescaler value >= 16 because of times 16 oversampling in receiver
+                divider_tx <=  wb_dat_i(15 downto 0);
+                div16:=unsigned(wb_dat_i(15 downto 4));
+                -- "Rounding" of result. if the lowest 4 Bits >=8 then suppress
+                -- the subtraction of -1 which effectivly rounds up the result by 1 
+                if wb_dat_i(3)='0' then
+                  div16 := div16 - 1;
+                end if;  
+                divider_rx_q <= "0000" & std_logic_vector(div16);
+
+              when "11" =>
                 rx_int_en <= wb_dat_i(0);
                 tx_int_en <= wb_dat_i(1);
                 fifo_int_en <= wb_dat_i(3);
@@ -502,7 +524,8 @@ begin
                 if wb_dat_i(19)='1' then
                   fifo_int_pending<='0';
                 end if;
-            end if;
+              when others =>  
+            end case;
          end if; -- bus cycle
       end if;
     end if;

@@ -62,6 +62,14 @@ constant threshold : natural := sample_max-sample_min;
 signal count_q: unsigned(bits-1 downto 0) := (others => '0');
 signal count_s: unsigned(bits-1 downto 0) := (others => '0'); -- Start timer
 
+-- Input synchronizer
+signal sin1, sin2 : std_logic;
+
+attribute IOB: string;
+attribute IOB of sin1: signal is "true";
+
+
+
 begin
 
 process(clk)
@@ -71,6 +79,10 @@ begin
       count_q <= (others => '0');
       sout <= '0';
     else
+      -- Input clk synchronizer
+      sin1 <= sin;
+      sin2 <= sin1;
+      
       if clear='1' then
         count_q <= (others => '0');
         count_s <= (others => '0');
@@ -80,7 +92,7 @@ begin
           -- Wait until sample_min ticks passed
           if count_s<sample_min then
             count_s <= count_s + 1;
-          elsif sin='1' then
+          elsif sin2='1' then
             count_q <= count_q + 1;
           end if;
         end if;
