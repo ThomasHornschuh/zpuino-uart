@@ -218,6 +218,8 @@ ATTRIBUTE X_INTERFACE_INFO OF wb_dat_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master
   signal divider_tx: std_logic_vector(15 downto 0) := (others=>'1');
 
   signal divider_rx_q: std_logic_vector(15 downto 0) :=(others=>'1');
+  
+  signal divider_reset : std_logic :='0';
 
   signal data_ready: std_logic;
   signal received_data: std_logic_vector(7 downto 0);
@@ -328,7 +330,7 @@ begin
   rx_timer: uart_brgen
     port map(
       clk => wb_clk_i,
-      rst => wb_rst_i,
+      rst => divider_reset,
       en => '1',
       clkout => rx_br,
       count => divider_rx_q
@@ -338,7 +340,7 @@ begin
   tx_timer: uart_brgen
     port map(
       clk => wb_clk_i,
-      rst => wb_rst_i,
+      rst => divider_reset,
       en => '1',
       clkout => tx_br,
       count => divider_tx
@@ -463,7 +465,10 @@ begin
     if rising_edge(wb_clk_i) then
       if wb_rst_i='1' then
         enabled_q<='0';
+        divider_reset<='1';
       else
+
+        divider_reset <= '0'; 
 
         -- Interrupt detection
         if rx_int_en='1' and rx_rdy='1' and rx_rdy0='0' then
@@ -494,6 +499,7 @@ begin
                 tx_div:=resize((unsigned(wb_dat_i(11 downto 0))+1) & "0000" , tx_div'length);
                 divider_tx <= std_logic_vector(tx_div);
                 enabled_q  <= wb_dat_i(16);
+                divider_reset<='1';
 
               when "10" =>
                 ext_mode_en <= wb_dat_i(17);
@@ -509,7 +515,7 @@ begin
                   div16 := div16 - 1;
                 end if;  
                 divider_rx_q <= "0000" & std_logic_vector(div16);
-
+                divider_reset<='1';
               when "11" =>
                 rx_int_en <= wb_dat_i(0);
                 tx_int_en <= wb_dat_i(1);
