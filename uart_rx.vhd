@@ -126,8 +126,8 @@ begin
   rxmvfilter: uart_mv_filter
   generic map (
     bits => 4,
-    sample_min => 5,
-    sample_max => 8
+    sample_min => 4,
+    sample_max => 9
   )
   port map (
     clk     => clk,
