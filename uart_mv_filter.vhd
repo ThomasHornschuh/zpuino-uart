@@ -49,6 +49,7 @@ entity uart_mv_filter is
     clk:      in std_logic;
     rst:      in std_logic;
     sin:      in std_logic;
+    sin_sync: out std_logic;
     sout:     out std_logic;
     clear:    in std_logic;
     enable:   in std_logic
@@ -71,6 +72,8 @@ attribute IOB of sin1: signal is "true";
 
 
 begin
+
+sin_sync <= sin2;
 
 process(clk)
 begin

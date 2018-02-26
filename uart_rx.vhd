@@ -62,8 +62,9 @@ architecture behave of uart_rx is
   );
   port (
     clk:      in std_logic;
-        rst:      in std_logic;
+    rst:      in std_logic;
     sin:      in std_logic;
+   sin_sync: out std_logic;
     sout:     out std_logic;
     clear:    in std_logic;
     enable:   in std_logic
@@ -82,6 +83,7 @@ architecture behave of uart_rx is
 
 
 signal rxf: std_logic;
+signal rx_sync : std_logic;
 signal baudtick: std_logic;
 signal rxd: std_logic_vector(7 downto 0);
 signal datacount: unsigned(2 downto 0);
@@ -93,6 +95,8 @@ signal start: std_logic;
 
 signal debug_synctick_q: std_logic;
 signal debug_baudreset_q: std_logic;
+
+
 
 
 -- State
@@ -126,13 +130,14 @@ begin
   rxmvfilter: uart_mv_filter
   generic map (
     bits => 4,
-    sample_min => 4,
-    sample_max => 9
+    sample_min => 5,
+    sample_max => 8
   )
   port map (
     clk     => clk,
     rst     => rst,
     sin     => rx,
+    sin_sync => rx_sync,
     sout    => rxf,
     clear   => filterreset,
     enable  => rxclk
@@ -167,7 +172,7 @@ begin
       end if;
       case state is
         when rx_idle =>
-          if rx='0' then       -- Start bit
+          if rx_sync='0' then       -- Start bit
             state <= rx_start;
             baudreset <= '1';
             start <='1';
@@ -195,7 +200,7 @@ begin
           -- Check for framing errors ?
 
           -- Do fast recovery here.
-          if rxf='1' then
+          if rx_sync='1' then
             dataready<='1';
             framing_error <='0';
             datao <= rxd;
