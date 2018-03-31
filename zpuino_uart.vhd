@@ -406,7 +406,7 @@ begin
 
   process(wb_adr_i, received_data,  fifo_data,uart_intx,ext_mode_en,divider_rx_q,
           fifo_nf,tx_rdy,rx_rdy,enabled_q,fifo_threshold,rx_int_en,tx_int_en,fifo_int_en,
-          rx_int_pending,tx_int_pending,fifo_int_pending)
+          rx_int_pending,tx_int_pending,fifo_int_pending,divider_tx)
   variable adr : std_logic_vector(1 downto 0);
   begin
     if extended then
