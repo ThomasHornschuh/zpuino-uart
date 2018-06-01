@@ -157,6 +157,9 @@ ATTRIBUTE X_INTERFACE_INFO OF wb_adr_i: SIGNAL IS "bonfire.eu:wb:Wishbone_master
 ATTRIBUTE X_INTERFACE_INFO OF wb_dat_i: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_dat_o";
 ATTRIBUTE X_INTERFACE_INFO OF wb_dat_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master:1.0 WB_SLAVE wb_dbus_dat_i";
 
+ATTRIBUTE X_INTERFACE_INFO OF tx: SIGNAL IS "xilinx.com:interface:uart:1.0 UART TxD";
+ATTRIBUTE X_INTERFACE_INFO OF rx: SIGNAL IS "xilinx.com:interface:uart:1.0 UART RxD";
+
 
   component uart_rx is
   port (
@@ -218,7 +221,7 @@ ATTRIBUTE X_INTERFACE_INFO OF wb_dat_o: SIGNAL IS "bonfire.eu:wb:Wishbone_master
   signal divider_tx: std_logic_vector(15 downto 0) := (others=>'1');
 
   signal divider_rx_q: std_logic_vector(15 downto 0) :=(others=>'1');
-  
+
   signal divider_reset : std_logic :='0';
 
   signal data_ready: std_logic;
@@ -468,7 +471,7 @@ begin
         divider_reset<='1';
       else
 
-        divider_reset <= '0'; 
+        divider_reset <= '0';
 
         -- Interrupt detection
         if rx_int_en='1' and rx_rdy='1' and rx_rdy0='0' then
@@ -510,10 +513,10 @@ begin
                 divider_tx <=  wb_dat_i(15 downto 0);
                 div16:=unsigned(wb_dat_i(15 downto 4));
                 -- "Rounding" of result. if the lowest 4 Bits >=8 then suppress
-                -- the subtraction of -1 which effectivly rounds up the result by 1 
+                -- the subtraction of -1 which effectivly rounds up the result by 1
                 if wb_dat_i(3)='0' then
                   div16 := div16 - 1;
-                end if;  
+                end if;
                 divider_rx_q <= "0000" & std_logic_vector(div16);
                 divider_reset<='1';
               when "11" =>
@@ -530,7 +533,7 @@ begin
                 if wb_dat_i(19)='1' then
                   fifo_int_pending<='0';
                 end if;
-              when others =>  
+              when others =>
             end case;
          end if; -- bus cycle
       end if;
