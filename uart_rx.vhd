@@ -163,12 +163,14 @@ begin
       state <= rx_idle;
       dataready <= '0';
       baudreset <= '0';
+      framing_error <='0';
       start<='0';
     else
       baudreset <= '0';
       start<='0';
       if read='1' then
         dataready <= '0';
+        framing_error <='0';
       end if;
       case state is
         when rx_idle =>
@@ -202,7 +204,6 @@ begin
           -- Do fast recovery here.
           if rx_sync='1' then
             dataready<='1';
-            framing_error <='0';
             datao <= rxd;
             state <= rx_idle;
           end if;

@@ -43,8 +43,9 @@ use work.log2.all;
 
 entity tb_zpuino_uart is
 generic (
-  clk_frequency_mhz : real := 96.0;
-  ext_mode : boolean := true
+  clk_frequency_mhz : real := 32.0;
+  ext_mode : boolean := true;
+  baudrate : natural := 38400
 );
 end entity tb_zpuino_uart;
 
@@ -84,16 +85,17 @@ architecture testbench of tb_zpuino_uart is
    subtype t_byte is std_logic_vector(7 downto 0);
 
    --constant baudrate : natural := 115200;
-   constant baudrate : natural := 500000;
+   --constant baudrate : natural := 500000;
    --constant bit_time : time := 8.68 us;
-   constant bit_time : time := 2.00 us;
+
+   constant bit_time : time :=   (1.0 / real(baudrate) *  real(10**6)) *  1 us;
    signal cbyte : t_byte;
    signal bitref : integer :=0;
 
    signal framing_errors :  natural;
    signal total_count :  natural;
 
-
+   signal rx_sent_bytes : natural := 0; -- Counter of bytes sent to to rx pin for receive test 
 
    signal receive_test_finish : boolean := false;
    signal send_test_finish : boolean := false;
@@ -101,6 +103,8 @@ architecture testbench of tb_zpuino_uart is
    constant log_file : string := "receive.log";
    constant send_logfile : string := "send.log";
 
+   type t_comp is  array( 0 to 1000 ) of t_byte; 
+   signal recv_compare : t_comp;
 
 
    procedure write_byte(file f: TEXT; c:t_byte) is
@@ -116,11 +120,7 @@ architecture testbench of tb_zpuino_uart is
    end;
 
 
-
-
 begin
-
-
 
     Inst_tb_uart_capture_tx: entity work.tb_uart_capture_tx
     GENERIC MAP (
@@ -185,10 +185,13 @@ begin
 
 -- Simulates a serial bit stream to the rxd pin
    rxd_sim: process
-      procedure send_byte(v: std_logic_vector(7 downto 0)) is
+      procedure send_byte(v: t_byte) is
       variable bi : integer;
       variable t : std_logic_vector(7 downto 0);
       begin
+
+        recv_compare(rx_sent_bytes) <= v; 
+        rx_sent_bytes <= rx_sent_bytes + 1; 
 
         bi:=7;
         for i in 0 to 7 loop
@@ -209,6 +212,8 @@ begin
         rxd <= '1'; -- stop bit
         bitref<=bitref+1;
         wait for bit_time;
+
+        
       end;
 
       procedure sendstring(s:string) is
@@ -219,7 +224,7 @@ begin
       end;
 
    begin
-       wait for bit_time*10;
+       wait for bit_time*10.5;
 
        --Optional "Clock drift" test
 --       for i in 1 to 1000 loop
@@ -227,13 +232,15 @@ begin
 --          bit_time <= bit_time + 0.004us; -- drift bit time
 --       end loop;
 
-        for i in 1 to 126 loop
-           send_byte(std_logic_vector(to_unsigned(i,8)));
-        end loop;
+        send_byte("01010101");
+
+      --   for i in 1 to 126 loop
+      --      send_byte(std_logic_vector(to_unsigned(i,8)));
+      --   end loop;
 
 
-       -- Send a string to the UART receiver pin
-       sendstring(Teststr);
+      --  -- Send a string to the UART receiver pin
+      --  sendstring(Teststr);
        wait for bit_time*10; -- give some time for the receive process
        receive_test_finish<=true; -- signal end of send simulation
        wait;
@@ -244,6 +251,7 @@ begin
     stimulus: process
       variable divisor : natural;
       variable count : natural;
+      variable error_count : natural;
 
       procedure uart_write(address : in std_logic_vector(wb_adr_in'range); data : in std_logic_vector(wb_dat_in'range)) is
         begin
@@ -303,6 +311,8 @@ begin
         reset <= '0';
         ctl:=(others=>'0');
         print("Clock Frequency: " & str(clk_frequency));
+        print("Baudrate:" & str(Baudrate) );
+        print("Bit period:" & time'image(bit_time) );
         if ext_mode then
           divisor:= natural( real(clk_frequency) / real(baudrate)) - 1;
           ctl(17):='1';
@@ -314,7 +324,8 @@ begin
         ctl(16):='1';
 
         uart_write("10",ctl);  -- Initalize UART
-        count:=1;
+        count:=0;
+        error_count:=0;
         --receive loop
         while not receive_test_finish loop
           -- Check Status Register
@@ -328,13 +339,24 @@ begin
              write_byte(l_file,rx_byte(7 downto 0));
              if rx_byte(31)='1' then
                print("Framing Error at position: " & str(count));
+               error_count:=error_count+1; 
              end if;
+             if rx_byte(t_byte'range) /= recv_compare(count) then
+               print("Receive error at position: " & str(count) );
+               error_count:=error_count+1; 
+             end if;   
              count:=count+1;
            end if;
        end loop;
 
        file_close(l_file);
-       print("Receive Simulation finished");
+       if rx_sent_bytes = count or error_count > 0 then 
+         print("Receive Simulation finished");
+       else 
+         print("Receive simulation error");
+       end if;   
+       print("Expected bytes: " & str(rx_sent_bytes) & " received bytes: " & str(count) &
+             " error bytes: " & str(error_count)  );    
 
 
        -- UART Send Simulation

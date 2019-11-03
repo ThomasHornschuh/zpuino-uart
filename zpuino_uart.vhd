@@ -107,6 +107,11 @@ use ieee.numeric_std.all;
 
 library work;
 
+-- synthesis translate_off
+use work.txt_util.all;
+-- synthesis translate_on
+
+
 
 entity zpuino_uart is
   generic (
@@ -486,6 +491,9 @@ begin
 
         -- Register Write
         if wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1' then
+           -- synthesis translate_off
+           print("UART Write to address: " & str(wb_adr_i)  & " value: " & hstr(wb_dat_i) );
+           -- synthesis translate_on
             if extended then
               adr:= wb_adr_i(minIObit+1 downto minIObit);
             else
@@ -510,6 +518,7 @@ begin
                 fifo_threshold <= wb_dat_i(18+fifo_threshold'high downto 18);
                 -- Bit [15:0] - UARTPRES UART prescaler (16 bits)   (f_clk /baudrate) - 1
                 -- Requires Prescaler value >= 16 because of times 16 oversampling in receiver
+
                 divider_tx <=  wb_dat_i(15 downto 0);
                 div16:=unsigned(wb_dat_i(15 downto 4));
                 -- "Rounding" of result. if the lowest 4 Bits >=8 then suppress
