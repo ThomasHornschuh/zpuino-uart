@@ -492,7 +492,7 @@ begin
         -- Register Write
         if wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1' then
            -- synthesis translate_off
-           print("UART Write to address: " & str(wb_adr_i)  & " value: " & hstr(wb_dat_i) );
+           --print("UART Write to address: " & str(wb_adr_i)  & " value: " & hstr(wb_dat_i) );
            -- synthesis translate_on
             if extended then
               adr:= wb_adr_i(minIObit+1 downto minIObit);

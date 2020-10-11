@@ -140,6 +140,7 @@ begin
     wait_send : process(send_test_finish)
     begin
       if send_test_finish then
+        print("");
          print("Send Test finished Total Bytes : " & str(total_count) & " Framing errors: " & str(framing_errors));
          assert framing_errors=0
             report "Send Test failed with framing errors"
@@ -150,8 +151,12 @@ begin
 
     end process;
 
+    send_progress: process(total_count) -- will be triggered on every increement of total_count
+    begin
+      write(OUTPUT,".");
+    end process;  
 
-
+    
     uut: entity work.zpuino_uart
     generic map (
        bits => log2(32),
@@ -234,13 +239,13 @@ begin
 
         send_byte("01010101");
 
-      --   for i in 1 to 126 loop
-      --      send_byte(std_logic_vector(to_unsigned(i,8)));
-      --   end loop;
+        for i in 1 to 126 loop
+           send_byte(std_logic_vector(to_unsigned(i,8)));
+        end loop;
 
 
-      --  -- Send a string to the UART receiver pin
-      --  sendstring(Teststr);
+       -- Send a string to the UART receiver pin
+       sendstring(Teststr);
        wait for bit_time*10; -- give some time for the receive process
        receive_test_finish<=true; -- signal end of send simulation
        wait;
@@ -303,6 +308,8 @@ begin
       variable status,rx_byte,ctl : std_logic_vector(31 downto 0);
       variable s: string(1 to 1);
       file l_file: TEXT;
+      variable L : line;
+   
 
 
     begin
@@ -312,8 +319,13 @@ begin
         ctl:=(others=>'0');
         print("Clock Frequency: " & str(clk_frequency));
         print("Baudrate:" & str(Baudrate) );
-        print("Bit period:" & time'image(bit_time) );
+        -- Bit Period print
+        write(OUTPUT,"Bit period: ");  
+        write(L, bit_time, unit => 1 us);
+        writeline(OUTPUT,L);
+        
         if ext_mode then
+          print("Using ext_mode");
           divisor:= natural( real(clk_frequency) / real(baudrate)) - 1;
           ctl(17):='1';
         else
@@ -337,6 +349,7 @@ begin
            if status(0)='1' then
              uart_read("00",rx_byte);
              write_byte(l_file,rx_byte(7 downto 0));
+             write_byte(output,rx_byte(7 downto 0));
              if rx_byte(31)='1' then
                print("Framing Error at position: " & str(count));
                error_count:=error_count+1; 

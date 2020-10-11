@@ -1,29 +1,29 @@
-CAPI=1
-[main]
-name = ::zpuino-uart:0
-depend = ::bonfire-util:0
-backend = ise
-simulators=ghdl isim
+CAPI=2:
+name:  ::zpuino-uart:0
+filesets:
+  rtl:
+    depend:
+    - ::bonfire-util:0
+    file_type: vhdlSource
+    files: [ tx_unit.vhd, uart_brgen.vhd, uart_mv_filter.vhd, uart_rx.vhd, zpuino_uart.vhd, zpuino_uart_fifo.vhd ]
+    
+    
+  sim:
+    file_type: vhdlSource-2008
+    files:
+    - tb/tb_zpuino_uart.vhd
 
-[fileset rtl]
-files = tx_unit.vhd uart_brgen.vhd uart_mv_filter.vhd uart_rx.vhd zpuino_uart.vhd zpuino_uart_fifo.vhd
-file_type=vhdlSource
-
-[fileset sim]
-files = tb/tb_zpuino_uart.vhd
-file_type=vhdlSource
-#usage=sim
-scope = private
-
-[simulator]
-toplevel = tb_zpuino_uart
-
-[ise]
-family = spartan6
-device = xc6slx9
-package = tqg144
-speed = -2
-top_module = tb_zpuino_uart
-
-[ghdl]
-run_options = --wave=uart.ghw 
+targets:
+  default:
+    filesets:
+    - rtl
+  sim:
+    default_tool: ghdl
+    tools:
+      ghdl:
+        analyze_options: [ -frelaxed-rules ]
+    filesets:
+    - rtl
+    - sim
+    toplevel: tb_zpuino_uart
+ 
