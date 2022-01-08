@@ -5,6 +5,12 @@
 --
 --  Version: 1.0
 --
+--
+--
+--  Extended Version 
+--  (c) 2017-2022 Thomas Hornschuh
+--  Rev 2022: completly reworked handling of interrupt pending flags 
+--
 --  The FreeBSD license
 --
 --  Redistribution and use in source and binary forms, with or without
@@ -97,20 +103,16 @@
 --//--! Bit 0 : Enable RX Interrupt
 --//--! Bit 1 : Enable TX Interrupt
 --//--! Bit 3 : Enable FIFO Nearly Full Interrupt
---//--! Bit 16 : R: RX Interrupt Pending W: Writing 1 will clear this pending bit
---//--! Bit 17 : R: TX Interrupt Pending W: Writing 1 will clear this pending bit
---//--! Bit 19 : R: RX FIFO Nearly Full Interrupt Pending W: Writing 1 will clear this pending bit
+--//--! Bit 16 : R: RX Interrupt Pending
+--//--! Bit 17 : R: TX Interrupt Pending 
+--//--! Bit 19 : R: RX FIFO Nearly Full Interrupt Pending 
+--// New 08.01.2022:  Pending bits are just a logical and of the corresponding Enable bit and the status bit   
 
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 library work;
-
--- synthesis translate_off
-use work.txt_util.all;
--- synthesis translate_on
-
 
 
 entity zpuino_uart is
@@ -400,15 +402,20 @@ begin
    fifo_nf <= '1' when rx_fifo_used > unsigned(fifo_threshold) else '0';
    rx_rdy  <= not fifo_empty;
    tx_rdy  <= not uart_busy;
-
+   
+   rx_int_pending <= rx_rdy when  rx_int_en='1' else '0';
+   tx_int_pending <= rx_rdy when  tx_int_en='1' else '0';
+   fifo_int_pending <= fifo_nf when  fifo_int_en='1' else '0';
+   
+  
 -- For change detection
-   process(wb_clk_i) begin
-     if rising_edge(wb_clk_i) then
-       fifo_nf0 <= fifo_nf;
-       rx_rdy0 <= rx_rdy;
-       tx_rdy0 <= tx_rdy;
-     end if;
-   end process;
+--   process(wb_clk_i) begin
+--     if rising_edge(wb_clk_i) then
+--       fifo_nf0 <= fifo_nf;
+--       rx_rdy0 <= rx_rdy;
+--       tx_rdy0 <= tx_rdy;
+--     end if;
+--   end process;
 
 
 
@@ -478,22 +485,19 @@ begin
 
         divider_reset <= '0';
 
-        -- Interrupt detection
-        if rx_int_en='1' and rx_rdy='1' and rx_rdy0='0' then
-          rx_int_pending <= '1';
-        end if;
-        if tx_int_en='1' and tx_rdy='1' and tx_rdy0='0' then
-          tx_int_pending <= '1';
-        end if;
-        if fifo_int_en='1' and fifo_nf='1' and fifo_nf0='0' then
-          fifo_int_pending <= '1';
-        end if;
+--        -- Interrupt detection
+--        if rx_int_en='1' and rx_rdy='1' and rx_rdy0='0' then
+--          rx_int_pending <= '1';
+--        end if;
+--        if tx_int_en='1' and tx_rdy='1' and tx_rdy0='0' then
+--          tx_int_pending <= '1';
+--        end if;
+--        if fifo_int_en='1' and fifo_nf='1' and fifo_nf0='0' then
+--          fifo_int_pending <= '1';
+--        end if;
 
         -- Register Write
         if wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1' then
-           -- synthesis translate_off
-           --print("UART Write to address: " & str(wb_adr_i)  & " value: " & hstr(wb_dat_i) );
-           -- synthesis translate_on
             if extended then
               adr:= wb_adr_i(minIObit+1 downto minIObit);
             else
@@ -518,7 +522,6 @@ begin
                 fifo_threshold <= wb_dat_i(18+fifo_threshold'high downto 18);
                 -- Bit [15:0] - UARTPRES UART prescaler (16 bits)   (f_clk /baudrate) - 1
                 -- Requires Prescaler value >= 16 because of times 16 oversampling in receiver
-
                 divider_tx <=  wb_dat_i(15 downto 0);
                 div16:=unsigned(wb_dat_i(15 downto 4));
                 -- "Rounding" of result. if the lowest 4 Bits >=8 then suppress
@@ -533,15 +536,15 @@ begin
                 tx_int_en <= wb_dat_i(1);
                 fifo_int_en <= wb_dat_i(3);
 
-                if wb_dat_i(16)='1' then
-                  rx_int_pending<='0';
-                end if;
-                if wb_dat_i(17)='1' then
-                  tx_int_pending<='0';
-                end if;
-                if wb_dat_i(19)='1' then
-                  fifo_int_pending<='0';
-                end if;
+--                if wb_dat_i(16)='1' then
+--                  rx_int_pending<='0';
+--                end if;
+--                if wb_dat_i(17)='1' then
+--                  tx_int_pending<='0';
+--                end if;
+--                if wb_dat_i(19)='1' then
+--                  fifo_int_pending<='0';
+--                end if;
               when others =>
             end case;
          end if; -- bus cycle
