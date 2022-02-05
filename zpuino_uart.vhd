@@ -404,7 +404,7 @@ begin
    tx_rdy  <= not uart_busy;
    
    rx_int_pending <= rx_rdy when  rx_int_en='1' else '0';
-   tx_int_pending <= rx_rdy when  tx_int_en='1' else '0';
+   tx_int_pending <= tx_rdy when  tx_int_en='1' else '0';
    fifo_int_pending <= fifo_nf when  fifo_int_en='1' else '0';
    
   
